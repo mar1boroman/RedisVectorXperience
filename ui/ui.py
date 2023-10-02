@@ -305,7 +305,7 @@ with st.sidebar:
         kwargs={"r": r, "stream": CHAT_HISTORY},
     )
     summarize = st.toggle(
-        "Show me a summary", value=True if r.exists(SUMMARY) else False
+        "Show Summary (Semantic Cache)", value=True if r.exists(SUMMARY) else False
     )
 
     chat = st.toggle("Chat with OpenAI")
@@ -341,7 +341,7 @@ if chat:
     if prompt:
         with st.chat_message("user"):
             st.markdown(prompt)
-            
+
             enhanced_prompt = prompt
             if rag:
                 print("Enabled RAG Model")
