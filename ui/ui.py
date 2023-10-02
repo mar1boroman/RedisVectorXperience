@@ -304,10 +304,11 @@ with st.sidebar:
         on_click=clear_chat_history,
         kwargs={"r": r, "stream": CHAT_HISTORY},
     )
+    st.divider()
     summarize = st.toggle(
         "Show Summary (Semantic Cache)", value=True if r.exists(SUMMARY) else False
     )
-
+    st.divider()
     chat = st.toggle("Chat with OpenAI")
 
     rag = st.toggle("Use RAG Model", disabled=False if chat else True)
