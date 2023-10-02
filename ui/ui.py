@@ -86,7 +86,7 @@ def find_docs(query_vector):
                     "text": doc.text,
                 }
             )
-        print(vector_score)
+        print(doc.title, vector_score)
     return responses
 
 
@@ -120,7 +120,7 @@ def format_response(responses: List[Dict], summarize=False):
         formatted_response += f"{doc['author']}<br>"
         formatted_response += f"{doc['date']}<br>"
         if summarize:
-            formatted_response += f"*{get_summary(doc['text'])}*<br>"
+            formatted_response += f"*{get_summary([doc['text']])[0]}*<br>"
         formatted_response += "<br>"
     return formatted_response
 
