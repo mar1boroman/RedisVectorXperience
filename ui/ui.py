@@ -20,6 +20,7 @@ from redis.commands.search.indexDefinition import IndexDefinition, IndexType
 
 
 load_dotenv()
+
 OPENAI_EMBEDDING_MODEL = "text-embedding-ada-002"
 OPENAI_TEXT_MODEL = "gpt-3.5-turbo"
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
@@ -29,6 +30,7 @@ CHAT_HISTORY = KEY_PREFIX + ":" + "chat:history"
 SUMMARY = KEY_PREFIX + ":" + "chat:summarize"
 SEMANTIC_CACHE_PREFIX = KEY_PREFIX + ":" + "semantic_cache"
 SEMANTIC_CACHE_INDEX_NAME = "idx:prompts"
+openai.api_key = OPENAI_API_KEY
 
 
 # Common Functions
@@ -189,7 +191,7 @@ def get_response(r: redis.Redis, user_prompt: str, summarize=False):
     if summarize:
         cached_response = check_semantic_cache(r, user_prompt_embedding=query_vector)
         if cached_response:
-            return 'Cached Response<br>' + cached_response
+            return "Cached Response<br>" + cached_response
 
     responses = find_docs(query_vector=query_vector)
     formatted_response = (
@@ -213,8 +215,14 @@ def create_semantic_search_index():
 
     if SEMANTIC_CACHE_INDEX_NAME not in r.execute_command("FT._LIST"):
         idx_schema = (
-            TextField("$.prompt",as_name="prompt",),
-            TextField("$.response",as_name="response",),
+            TextField(
+                "$.prompt",
+                as_name="prompt",
+            ),
+            TextField(
+                "$.response",
+                as_name="response",
+            ),
             VectorField(
                 "$.prompt_embedding",
                 "FLAT",
@@ -258,8 +266,27 @@ def create_semantic_search_index():
             print("Index ready!")
 
 
-def format_prompt(user_prompt: str):
-    return user_prompt
+def get_context(user_prompt):
+    if not rag:
+        return user_prompt
+    else:
+        query_vector = get_embedding(user_prompt)
+        responses = find_docs(query_vector=query_vector)
+        context = ""
+        for doc in responses:
+            context += doc["text"]
+            context += "\n"
+        return (
+            f"""Use the following pieces of context to answer the question at the end. 
+        If you don't know the answer, say that you don't know, don't try to make up an answer.
+        Context:
+        {context}
+        Question:
+        {user_prompt}
+        """
+            if context
+            else False
+        )
 
 
 # UI Rendering
@@ -281,32 +308,99 @@ with st.sidebar:
         "Show me a summary", value=True if r.exists(SUMMARY) else False
     )
 
+    chat = st.toggle("Chat with OpenAI")
+
+    rag = st.toggle("Use RAG Model", disabled=False if chat else True)
+
+    if not chat:
+        rag = False
+
+
 if summarize:
     create_semantic_search_index()
     r.set(SUMMARY, 0)
     with st.chat_message("assistant"):
-        st.markdown(
+        print(
             """Blogs will be summarized using 
             [facebook/bart-large-cnn](https://huggingface.co/facebook/bart-large-cnn) model.
             Semantic Cache is enabled!"""
         )
 else:
     with st.chat_message("assistant"):
-        st.markdown("Summarization Disabled. Semantic Cache preserved for future use.")
+        print("Summarization Disabled. Semantic Cache preserved for future use.")
         r.delete(SUMMARY)
 
 
 prompt = st.chat_input("Ask me anything!")
-if prompt:
-    with st.chat_message("user"):
-        fmt_prompt = format_prompt(prompt)
-        st.markdown(fmt_prompt, unsafe_allow_html=True)
-        r.xadd(CHAT_HISTORY, {"role": "user", "content": fmt_prompt})
-    # Display response in chat message container
-    with st.chat_message("assistant"):
-        response = get_response(r, fmt_prompt, summarize=summarize)
-        if not response:
-            response = "I do not have enough information to answer this question"
 
-        st.markdown(response, unsafe_allow_html=True)
-        r.xadd(CHAT_HISTORY, {"role": "assistant", "content": response})
+
+if chat:
+    create_semantic_search_index()
+
+    print("Enabled chat with Open AI")
+    if prompt:
+        with st.chat_message("user"):
+            st.markdown(prompt)
+            
+            enhanced_prompt = prompt
+            if rag:
+                print("Enabled RAG Model")
+                enhanced_prompt = get_context(prompt)
+            else:
+                print("Running without RAG Model")
+                enhanced_prompt = (
+                    prompt
+                    + "<br>If you don't know the answer, say that you don't know, don't try to make up an answer."
+                )
+            r.xadd(CHAT_HISTORY, {"role": "user", "content": prompt})
+
+        with st.chat_message("assistant"):
+            user_prompt_embedding = get_embedding(prompt)
+
+            message_placeholder = st.empty()
+            full_response = ""
+
+            cached_response = check_semantic_cache(
+                r, user_prompt_embedding=user_prompt_embedding
+            )
+            if cached_response:
+                full_response = cached_response
+                message_placeholder.markdown("Cached Response : " + cached_response)
+            else:
+                for response in openai.ChatCompletion.create(
+                    model=OPENAI_TEXT_MODEL,
+                    messages=[{"role": "user", "content": enhanced_prompt}],
+                    stream=True,
+                ):
+                    full_response += response.choices[0].delta.get("content", "")
+                    message_placeholder.markdown(full_response + "▌")
+                message_placeholder.markdown(full_response)
+
+                if rag:
+                    semantic_cache_keyname = (
+                        SEMANTIC_CACHE_PREFIX + ":" + str(uuid.uuid4()).replace("-", "")
+                    )
+                    r.json().set(
+                        name=semantic_cache_keyname,
+                        path="$",
+                        obj={
+                            "prompt": prompt,
+                            "response": full_response,
+                            "prompt_embedding": user_prompt_embedding,
+                        },
+                    )
+            r.xadd(CHAT_HISTORY, {"role": "assistant", "content": full_response})
+else:
+    print("Now only working with local documents")
+    if prompt:
+        with st.chat_message("user"):
+            st.markdown(prompt, unsafe_allow_html=True)
+            r.xadd(CHAT_HISTORY, {"role": "user", "content": prompt})
+        # Display response in chat message container
+        with st.chat_message("assistant"):
+            response = get_response(r, prompt, summarize=summarize)
+            if not response:
+                response = "I do not have enough information to answer this question"
+
+            st.markdown(response, unsafe_allow_html=True)
+            r.xadd(CHAT_HISTORY, {"role": "assistant", "content": response})
