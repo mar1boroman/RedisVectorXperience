@@ -1,4 +1,5 @@
 import redis
+import uuid
 import time
 import os
 import streamlit as st
@@ -9,6 +10,13 @@ import openai
 import numpy as np
 from typing import List, Dict
 from transformers import BartTokenizer, BartForConditionalGeneration
+from redis.commands.search.field import (
+    NumericField,
+    TagField,
+    TextField,
+    VectorField,
+)
+from redis.commands.search.indexDefinition import IndexDefinition, IndexType
 
 
 load_dotenv()
@@ -19,6 +27,8 @@ INDEX_NAME = "idx:blogs"
 KEY_PREFIX = "streamlit"
 CHAT_HISTORY = KEY_PREFIX + ":" + "chat:history"
 SUMMARY = KEY_PREFIX + ":" + "chat:summarize"
+SEMANTIC_CACHE_PREFIX = KEY_PREFIX + ":" + "semantic_cache"
+SEMANTIC_CACHE_INDEX_NAME = "idx:prompts"
 
 
 # Common Functions
@@ -98,6 +108,7 @@ def get_embedding(doc):
     embedding = response["data"][0]["embedding"]
     return embedding
 
+
 def get_summary(text: List[str]) -> List[str]:
     tokenizer = BartTokenizer.from_pretrained("facebook/bart-large-cnn")
     model = BartForConditionalGeneration.from_pretrained("facebook/bart-large-cnn")
@@ -113,26 +124,138 @@ def get_summary(text: List[str]) -> List[str]:
     ]
     return summaries
 
-def format_response(responses: List[Dict], summarize=False):
+
+def check_semantic_cache(r, user_prompt_embedding):
+    response = ""
+    query_vector = user_prompt_embedding
+    query = (
+        Query("(*)=>[KNN 1 @vector $query_vector AS vector_score]")
+        .sort_by("vector_score")
+        .return_fields("vector_score", "response", "prompt")
+        .dialect(2)
+    )
+
+    query_vector_bytes = np.array(query_vector, dtype=np.float32).tobytes()
+    result_docs = (
+        r.ft(SEMANTIC_CACHE_INDEX_NAME)
+        .search(query, {"query_vector": query_vector_bytes})
+        .docs
+    )
+    for doc in result_docs:
+        vector_score = round(1 - float(doc.vector_score), 2)
+        if vector_score > 0.9:
+            response = doc.response
+        print(doc.prompt, vector_score)
+    return response if response else False
+
+
+def format_response(
+    r: redis.Redis,
+    user_prompt: str,
+    user_prompt_embedding,
+    responses,
+    summarize=False,
+):
     formatted_response = ""
     for doc in responses:
         formatted_response += f"**[{doc['title']}]({doc['url']})**<br>"
         formatted_response += f"{doc['author']}<br>"
         formatted_response += f"{doc['date']}<br>"
         if summarize:
-            formatted_response += f"*{get_summary([doc['text']])[0]}*<br>"
+            summary = get_summary([doc["text"]])[0]
+            formatted_response += f"*{summary}*<br>"
+
         formatted_response += "<br>"
+
+    if summarize:
+        semantic_cache_keyname = (
+            SEMANTIC_CACHE_PREFIX + ":" + str(uuid.uuid4()).replace("-", "")
+        )
+        r.json().set(
+            name=semantic_cache_keyname,
+            path="$",
+            obj={
+                "prompt": user_prompt,
+                "response": formatted_response,
+                "prompt_embedding": user_prompt_embedding,
+            },
+        )
+
     return formatted_response
 
 
 def get_response(r: redis.Redis, user_prompt: str, summarize=False):
-    responses = find_docs(query_vector=get_embedding(user_prompt))
+    query_vector = get_embedding(user_prompt)
+    if summarize:
+        cached_response = check_semantic_cache(r, user_prompt_embedding=query_vector)
+        if cached_response:
+            return 'Cached Response<br>' + cached_response
+
+    responses = find_docs(query_vector=query_vector)
     formatted_response = (
-        format_response(responses=responses, summarize=summarize)
+        format_response(
+            r=r,
+            user_prompt=user_prompt,
+            user_prompt_embedding=query_vector,
+            responses=responses,
+            summarize=summarize,
+        )
         if responses
         else False
     )
     return formatted_response
+
+
+def create_semantic_search_index():
+    # if SEMANTIC_CACHE_INDEX_NAME in r.execute_command("FT._LIST"):
+    #     print("Dropping the existing Index")
+    #     r.ft(SEMANTIC_CACHE_INDEX_NAME).dropindex()
+
+    if SEMANTIC_CACHE_INDEX_NAME not in r.execute_command("FT._LIST"):
+        idx_schema = (
+            TextField("$.prompt",as_name="prompt",),
+            TextField("$.response",as_name="response",),
+            VectorField(
+                "$.prompt_embedding",
+                "FLAT",
+                {
+                    "TYPE": "FLOAT32",
+                    "DIM": 1536,
+                    "DISTANCE_METRIC": "COSINE",
+                },
+                as_name="vector",
+            ),
+        )
+
+        idx_definition = IndexDefinition(
+            prefix=[SEMANTIC_CACHE_PREFIX], index_type=IndexType.JSON
+        )
+        res = r.ft(SEMANTIC_CACHE_INDEX_NAME).create_index(
+            fields=idx_schema, definition=idx_definition
+        )
+
+        if res == "OK":
+            print(f"Index {SEMANTIC_CACHE_INDEX_NAME} created successfully")
+            percent_indexed = 0.0
+            idx_info = r.ft(SEMANTIC_CACHE_INDEX_NAME).info()
+            percent_indexed, num_docs, hash_indexing_failures = (
+                idx_info["percent_indexed"],
+                idx_info["num_docs"],
+                idx_info["hash_indexing_failures"],
+            )
+            time.sleep(2)
+            while float(percent_indexed) < 1:
+                time.sleep(5)
+                idx_info = r.ft(SEMANTIC_CACHE_INDEX_NAME).info()
+                percent_indexed, num_docs, hash_indexing_failures = (
+                    idx_info["percent_indexed"],
+                    idx_info["num_docs"],
+                    idx_info["hash_indexing_failures"],
+                )
+            print(
+                f"{round(float(percent_indexed)*100,2)} % indexed, {num_docs} documents indexed, {hash_indexing_failures} documents indexing failed"
+            )
+            print("Index ready!")
 
 
 def format_prompt(user_prompt: str):
@@ -159,6 +282,7 @@ with st.sidebar:
     )
 
 if summarize:
+    create_semantic_search_index()
     r.set(SUMMARY, 0)
     with st.chat_message("assistant"):
         st.markdown(
