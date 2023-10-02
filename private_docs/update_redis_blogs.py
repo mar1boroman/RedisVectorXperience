@@ -4,16 +4,10 @@ import time
 import requests
 import configparser
 import pandas as pd
-from datetime import datetime
+from datetime import datetime, timedelta
 from bs4 import BeautifulSoup
 from rich.table import Column
 from rich.progress import Progress, BarColumn, TextColumn
-
-
-def get_redis_uri():
-    parser = configparser.ConfigParser()
-    parser.read("config.ini")
-    return parser["RedisURI"]["uri"]
 
 
 def compare_timestamps(timestamp1, timestamp2):
@@ -89,17 +83,19 @@ def get_blogs_text(blog_links):
     """
     text_column = TextColumn("{task.description}", table_column=Column(ratio=3))
     bar_column = BarColumn(bar_width=None, table_column=Column(ratio=1))
-    
+
     with Progress(bar_column, text_column, expand=True) as progress:
         all_blogs = [x for x in blog_links if x not in ["https://redis.com/blog/"]]
-        
+
         task = progress.add_task("Downloading Blogs", total=len(all_blogs))
 
         all_posts = []
 
         for i, post in enumerate(all_blogs):
             # progress.console.print(f"Processing post url : {post}")
-            progress.update(task, advance=1, description=f"Processing post url : {post}")
+            progress.update(
+                task, advance=1, description=f"Processing post url : {post}"
+            )
 
             post_r = requests.get(post)
             post_content = post_r.text
@@ -127,7 +123,7 @@ def get_blogs_text(blog_links):
         return all_posts
 
 
-def save_to_csv(all_blogs, excel=True, file_name="data/redis_blogs.csv"):
+def save_to_csv(all_blogs, file_name="private_docs/redis_blogs.csv"):
     def concatenate_and_reset_ids(df1, df2):
         # Concatenate the two dataframes
         combined_df = pd.concat([df1, df2], ignore_index=True)
@@ -142,16 +138,16 @@ def save_to_csv(all_blogs, excel=True, file_name="data/redis_blogs.csv"):
         return combined_df
 
     new_blogs_df = pd.DataFrame(all_blogs)
-    
+
     if os.path.isfile(file_name):
         existing_blogs_df = pd.read_csv(file_name)
     else:
-        existing_blogs_df = pd.DataFrame([],columns=['id','url','title','date','author','text'])
+        existing_blogs_df = pd.DataFrame(
+            [], columns=["id", "url", "title", "date", "author", "text"]
+        )
 
     blogs_df = concatenate_and_reset_ids(existing_blogs_df, new_blogs_df)
-    blogs_df.to_csv("data/redis_blogs.csv", index=False)
-    if excel:
-        blogs_df.to_excel("data/redis_blogs.xlsx", index=False)
+    blogs_df.to_csv(file_name, index=False)
 
 
 def main():
@@ -160,8 +156,13 @@ def main():
     start = time.time()
     links, latest_timestamp = get_blog_links()
     all_blogs = get_blogs_text(links)
-    save_to_csv(all_blogs, excel=False)
-    update_latest_timestamp(latest_timestamp)
+    save_to_csv(all_blogs=all_blogs)
+
+    # Add one millisecond to the latest timestamp to avoid duplication
+    updated_latest_timestamp = datetime.strptime(
+        latest_timestamp, "%Y-%m-%dT%H:%M:%S%z"
+    ) + timedelta(seconds=1)
+    update_latest_timestamp(updated_latest_timestamp.strftime("%Y-%m-%dT%H:%M:%S%z"))
     print(f"Time taken for execution: {time.time() - start}\n")
 
 
