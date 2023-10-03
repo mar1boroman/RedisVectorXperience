@@ -353,6 +353,7 @@ if chat:
                     prompt
                     + "<br>If you don't know the answer, say that you don't know, don't try to make up an answer."
                 )
+            print(enhanced_prompt)
             r.xadd(CHAT_HISTORY, {"role": "user", "content": prompt})
 
         with st.chat_message("assistant"):
