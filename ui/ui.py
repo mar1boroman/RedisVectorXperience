@@ -70,13 +70,18 @@ def render_chat_history(r: redis.Redis, stream):
             st.markdown("Hi, How are you doing?", unsafe_allow_html=True)
 
 
-def find_docs(query_vector):
+def find_docs(query_vector, author="*"):
     """
     Finds 3 similar docs in redis based on user prompt using vector similarity search
     """
+    filter = author
+    if author != "*":
+        filter = "@author:{" + author + "}"
+    print(f"({filter})=>[KNN 3 @vector $query_vector AS vector_score]")
+
     responses = []
     query = (
-        Query("(*)=>[KNN 3 @vector $query_vector AS vector_score]")
+        Query(f"({filter})=>[KNN 3 @vector $query_vector AS vector_score]")
         .sort_by("vector_score")
         .return_fields("vector_score", "id", "url", "author", "date", "title", "text")
         .dialect(2)
@@ -186,14 +191,14 @@ def format_response(
     return formatted_response
 
 
-def get_response(r: redis.Redis, user_prompt: str, summarize=False):
+def get_response(r: redis.Redis, user_prompt: str, summarize=False, author="*"):
     query_vector = get_embedding(user_prompt)
     if summarize:
         cached_response = check_semantic_cache(r, user_prompt_embedding=query_vector)
         if cached_response:
             return "Cached Response<br>" + cached_response
 
-    responses = find_docs(query_vector=query_vector)
+    responses = find_docs(query_vector=query_vector, author=author)
     formatted_response = (
         format_response(
             r=r,
@@ -308,6 +313,11 @@ with st.sidebar:
     summarize = st.toggle(
         "Show Summary (Semantic Cache)", value=True if r.exists(SUMMARY) else False
     )
+    options = r.ft(INDEX_NAME).tagvals("author")
+    options.insert(0, "*")
+    author_selected = st.selectbox("Select a author:", options=options)
+    print("Author Selected : " + author_selected)
+    
     st.divider()
     chat = st.toggle("Chat with OpenAI")
 
@@ -320,16 +330,14 @@ with st.sidebar:
 if summarize:
     create_semantic_search_index()
     r.set(SUMMARY, 0)
-    with st.chat_message("assistant"):
-        print(
-            """Blogs will be summarized using 
-            [facebook/bart-large-cnn](https://huggingface.co/facebook/bart-large-cnn) model.
-            Semantic Cache is enabled!"""
-        )
+    print(
+        """Blogs will be summarized using 
+        [facebook/bart-large-cnn](https://huggingface.co/facebook/bart-large-cnn) model.
+        Semantic Cache is enabled!"""
+    )
 else:
-    with st.chat_message("assistant"):
-        print("Summarization Disabled. Semantic Cache preserved for future use.")
-        r.delete(SUMMARY)
+    print("Summarization Disabled. Semantic Cache preserved for future use.")
+    r.delete(SUMMARY)
 
 
 prompt = st.chat_input("Ask me anything!")
@@ -400,7 +408,12 @@ else:
             r.xadd(CHAT_HISTORY, {"role": "user", "content": prompt})
         # Display response in chat message container
         with st.chat_message("assistant"):
-            response = get_response(r, prompt, summarize=summarize)
+            if author_selected:
+                response = get_response(
+                    r, prompt, summarize=summarize, author=author_selected
+                )
+            else:
+                response = get_response(r, prompt, summarize=summarize)
             if not response:
                 response = "I do not have enough information to answer this question"
 
