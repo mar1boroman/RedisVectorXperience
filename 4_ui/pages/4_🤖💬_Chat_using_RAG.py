@@ -38,7 +38,7 @@ def sticky():
                     z-index: 999;
                 }
                 .fixed-header {
-                    border-bottom: 1px solid black;
+                    border-bottom: 1px solid #A0A2E4;
                 }
             </style>
         """,

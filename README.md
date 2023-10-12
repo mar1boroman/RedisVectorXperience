@@ -1,5 +1,5 @@
 <div align="center">
-    <a href="https://github.com/mar1boroman/redis-vector-db-usecases"><img src="./0_assets/redis-cube-red-white-rgb.svg" width="30%"><img></a>
+    <a href="https://github.com/mar1boroman/redis-vector-db-usecases"><img src="0_assets/redis-cube-red_white-rgb.png" width="30%"><img></a>
     <br />
     <br />
 <div display="inline-block">
@@ -38,7 +38,7 @@ We explore 4 specific areas of the 'vector database' use cases
 
 ![](0_assets/LLM_No_RAG.gif)
 
-#### 4.1 Response with RAG\
+#### 4.1 Response with RAG
 
 ![](0_assets/LLM_With_RAG.gif)
 

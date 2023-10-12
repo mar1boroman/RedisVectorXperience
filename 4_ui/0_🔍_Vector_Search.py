@@ -8,6 +8,7 @@ from dotenv import load_dotenv
 from streamlit_extras.colored_header import colored_header
 from streamlit_extras.tags import tagger_component
 from rich import print
+from streamlit_extras.app_logo import add_logo
 
 load_dotenv()
 OPENAI_EMBEDDING_MODEL = "text-embedding-ada-002"
@@ -134,6 +135,7 @@ def get_explanation():
 def main():
     r = get_redis_conn()
     st.set_page_config()
+    add_logo('0_assets/redis-favicon-144x144.png')
     colored_header(
         label="Find relevant content superfast with Vector Similarity Search",
         description="Use Vector Similarity search to search over 700 Blogs from redis.com/blogs and find 3 relevant blogs",
