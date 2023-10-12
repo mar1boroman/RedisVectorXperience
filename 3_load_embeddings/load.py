@@ -175,7 +175,7 @@ def main():
         "-f",
         "--file",
         help="Input Text file",
-        default="generate_embeddings/redis_blogs_with_embeddings.csv",
+        default="2_generate_embeddings/redis_blogs_with_embeddings.csv",
     )
     args = argparser.parse_args()
 

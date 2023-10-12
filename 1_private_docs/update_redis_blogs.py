@@ -123,7 +123,7 @@ def get_blogs_text(blog_links):
         return all_posts
 
 
-def save_to_csv(all_blogs, file_name="private_docs/redis_blogs.csv"):
+def save_to_csv(all_blogs, file_name):
     def concatenate_and_reset_ids(df1, df2):
         # Concatenate the two dataframes
         combined_df = pd.concat([df1, df2], ignore_index=True)
@@ -156,7 +156,7 @@ def main():
     start = time.time()
     links, latest_timestamp = get_blog_links()
     all_blogs = get_blogs_text(links)
-    save_to_csv(all_blogs=all_blogs)
+    save_to_csv(all_blogs=all_blogs, file_name="1_private_docs/redis_blogs.csv")
 
     # Add one millisecond to the latest timestamp to avoid duplication
     updated_latest_timestamp = datetime.strptime(
