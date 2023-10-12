@@ -65,7 +65,7 @@ def save_embeddings(filepath, dict_list):
 def main():
     st = time.time()
     records = create_embeddings(
-        filepath="1_private_docs/redis_blogs.csv", from_id=696, to_id=1000
+        filepath="1_private_docs/redis_blogs.csv", from_id=0, to_id=1000
     )
     save_embeddings(
         filepath="2_generate_embeddings/redis_blogs_with_embeddings.csv",
