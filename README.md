@@ -92,7 +92,7 @@ vi .env
 ### Extract & Update the blogs and store in a CSV file (Optional)
 
 ```
-python python 1_private_docs/update_redis_blogs.py
+python 1_private_docs/update_redis_blogs.py
 ```
 
 This script will update the blog entries in the [redis_blogs.csv](./1_private_docs/redis_blogs.csv) file
