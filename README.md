@@ -68,7 +68,7 @@ If you do not want to use a docker image, you can sign up for a free Redis Cloud
 Download the repository
 
 ```
-git clone https://github.com/mar1boroman/redis-vector-db-usecases.git && cd redis-vector-db-usecases
+git clone https://github.com/mar1boroman/RedisVectorXperience.git && cd RedisVectorXperience
 ```
 Prepare and activate the virtual environment
 
