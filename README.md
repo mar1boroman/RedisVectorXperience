@@ -89,7 +89,7 @@ vi .env
 ```
 
 
-### Extract & Update the blogs and store in a CSV file (Optional)
+### Extract & Update the blogs and store in a CSV file (Optional - Dont run if not necessary)
 
 ```
 python 1_private_docs/update_redis_blogs.py
@@ -98,7 +98,7 @@ python 1_private_docs/update_redis_blogs.py
 This script will update the blog entries in the [redis_blogs.csv](./1_private_docs/redis_blogs.csv) file
 Currently the data is updated till Oct 9, 2023.
 
-### Generate the embeddings and store in a CSV file (Optional)
+### Generate the embeddings and store in a CSV file (Optional - Dont run if not necessary)
 
 
 ```
