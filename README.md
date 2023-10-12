@@ -100,6 +100,7 @@ Currently the data is updated till Oct 9, 2023.
 
 ### Generate the embeddings and store in a CSV file (Optional - Dont run if not necessary)
 
+If you run this step, please make sure you delete the existing [redis_blogs_with_embeddings.csv](2_generate_embeddings/redis_blogs_with_embeddings.csv) with pre generated embeddings.
 
 ```
 python 2_generate_embeddings/gen.py
