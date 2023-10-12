@@ -5,16 +5,12 @@ from rich import print
 import os
 import ast
 import argparse
-from redis.commands.search.field import (
-    NumericField,
-    TagField,
-    TextField,
-    VectorField,
-)
+from redis.commands.search.field import NumericField, TagField, TextField, VectorField
 from redis.commands.search.indexDefinition import IndexDefinition, IndexType
 from dotenv import load_dotenv
 
 load_dotenv()
+
 
 def get_redis_conn() -> redis.Redis:
     redis_host, redis_port, redis_user, redis_pass = (
@@ -35,7 +31,8 @@ def get_redis_conn() -> redis.Redis:
         )
     return r
 
-def load_embeddings(r:redis.Redis, filepath):
+
+def load_embeddings(r: redis.Redis, filepath):
     print(f"Using the input file {filepath} to load embeddings...")
     p = r.pipeline()
     with open(filepath, "r") as f:
@@ -54,8 +51,8 @@ def load_embeddings(r:redis.Redis, filepath):
                 "text": row[5],
                 "embedding": embedding,
             }
-            p.json().set(name=keyname, path="$", obj=row )
-    
+            p.json().set(name=keyname, path="$", obj=row)
+
     # Load documents into redis
     start_load_redis = time.time()
     p.execute()
@@ -67,13 +64,57 @@ def load_embeddings(r:redis.Redis, filepath):
 def build_idx_definition(idx_name="idx:blogs", key_prefix="blog:"):
     idx_schema = (
         NumericField("id", sortable=True, as_name="id"),
-        TextField("$.url", as_name="url",),
-        TextField("$.title", as_name="title",),
-        TextField("$.date", sortable=True, as_name="date",),
-        TagField("$.author", as_name="author",),
-        TextField("$.text", as_name="text",),
+        TextField(
+            "$.url",
+            as_name="url",
+        ),
+        TextField(
+            "$.title",
+            as_name="title",
+        ),
+        TextField(
+            "$.date",
+            sortable=True,
+            as_name="date",
+        ),
+        TagField(
+            "$.author",
+            as_name="author",
+        ),
+        TextField(
+            "$.text",
+            as_name="text",
+        ),
         VectorField(
             "$.embedding",
+            "FLAT",
+            {
+                "TYPE": "FLOAT32",
+                "DIM": 1536,
+                "DISTANCE_METRIC": "COSINE",
+            },
+            as_name="vector",
+        ),
+    )
+
+    idx_definition = IndexDefinition(prefix=[key_prefix], index_type=IndexType.JSON)
+    return idx_name, idx_schema, idx_definition
+
+
+def build_semantic_idx_definition(
+    idx_name="idx:semantic", key_prefix="streamlit:semantic_cache:"
+):
+    idx_schema = (
+        TextField(
+            "$.prompt",
+            as_name="prompt",
+        ),
+        TextField(
+            "$.results",
+            as_name="results",
+        ),
+        VectorField(
+            "$.prompt_embedding",
             "FLAT",
             {
                 "TYPE": "FLOAT32",
@@ -121,7 +162,6 @@ def create_idx(r: redis.Redis, idx_name, idx_schema, idx_definition):
 
 
 def main():
-    
     r = get_redis_conn()
 
     # Command Line arguments
@@ -154,6 +194,15 @@ def main():
         idx_name="idx:blogs", key_prefix="blog:"
     )
     create_idx(r, idx_name, idx_schema, idx_definition)
+
+    (
+        semantic_idx_name,
+        semantic_idx_schema,
+        semantic_idx_definition,
+    ) = build_semantic_idx_definition(
+        idx_name="idx:semantic", key_prefix="streamlit:semantic_cache:"
+    )
+    create_idx(r, semantic_idx_name, semantic_idx_schema, semantic_idx_definition)
 
 
 if __name__ == "__main__":
