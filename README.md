@@ -106,6 +106,7 @@ python 2_generate_embeddings/gen.py
 ```
 
 This script will read the entries from [redis_blogs.csv](./1_private_docs/redis_blogs.csv) file and generate embeddings for every record using OPEN AI model.
+This repository already includes the file [redis_blogs_with_embeddings.csv](2_generate_embeddings/redis_blogs_with_embeddings.csv) with pre generated embeddings.
 Currently the data is updated till Oct 9, 2023.
 
 ### Load the embeddings into Redis database
