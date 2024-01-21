@@ -1,7 +1,9 @@
 import redis
 import os
 import streamlit as st
-import openai
+from openai import OpenAI
+
+
 import numpy as np
 from redis.commands.search.query import Query
 from dotenv import load_dotenv
@@ -13,8 +15,8 @@ OPENAI_EMBEDDING_MODEL = "text-embedding-ada-002"
 OPENAI_TEXT_MODEL = "gpt-3.5-turbo"
 INDEX_NAME = "idx:blogs"
 CHAT_HISTORY = "streamlit:chat:history"
-openai.api_key = os.getenv("OPENAI_API_KEY")
 EXPLANATION = []
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 # Common Functions
 
 def get_explanation():
@@ -145,12 +147,12 @@ def main():
             with st.chat_message("assistant"):
                 message_placeholder = st.empty()
                 full_response = ""
-                for response in openai.ChatCompletion.create(
+                for response in client.chat.completions.create(
                     model=OPENAI_TEXT_MODEL,
                     messages=[{"role": "user", "content": prompt}],
-                    stream=True,
-                ):
-                    full_response += response.choices[0].delta.get("content", "")
+                    stream=True
+                    ):
+                    full_response += response.choices[0].delta.content or ""
                     message_placeholder.markdown(full_response + "▌")
                 message_placeholder.markdown(full_response)
                 EXPLANATION.append(f"Open AI *{OPENAI_TEXT_MODEL}* responds with a generated response")

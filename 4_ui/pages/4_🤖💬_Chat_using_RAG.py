@@ -1,7 +1,9 @@
 import redis
 import os
 import streamlit as st
-import openai
+from openai import OpenAI
+
+
 import numpy as np
 from redis.commands.search.query import Query
 from dotenv import load_dotenv
@@ -13,10 +15,10 @@ OPENAI_EMBEDDING_MODEL = "text-embedding-ada-002"
 OPENAI_TEXT_MODEL = "gpt-3.5-turbo"
 INDEX_NAME = "idx:blogs"
 CHAT_HISTORY = "streamlit:chat:history"
-openai.api_key = os.getenv("OPENAI_API_KEY")
 EXPLANATION = []
 # Common Functions
 
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 def get_explanation():
     expl_doc = ""
@@ -125,11 +127,8 @@ def get_context(r: redis.Redis, prompt):
         EXPLANATION.append(
             f"The app uses the Open AI *{OPENAI_EMBEDDING_MODEL}* API to generate an embedding for the text '{doc}'"
         )
-        openai.api_key = os.getenv("OPENAI_API_KEY")
-        response = openai.Embedding.create(
-            input=doc, model=OPENAI_EMBEDDING_MODEL, encoding_format="float"
-        )
-        embedding = response["data"][0]["embedding"]
+        response = client.embeddings.create(input=doc, model=OPENAI_EMBEDDING_MODEL, encoding_format="float")
+        embedding = response.data[0].embedding
         return embedding
 
     query_vector = get_embedding(prompt)
@@ -227,12 +226,10 @@ def main():
                 enhanced_prompt = build_prompt_with_context(prompt, context) # Build new prompt = old prompt + context
                 
 
-                for response in openai.ChatCompletion.create(
-                    model=OPENAI_TEXT_MODEL,
-                    messages=[{"role": "user", "content": enhanced_prompt}],
-                    stream=True,
-                ):
-                    full_response += response.choices[0].delta.get("content", "")
+                for response in client.chat.completions.create(model=OPENAI_TEXT_MODEL,
+                messages=[{"role": "user", "content": enhanced_prompt}],
+                stream=True):
+                    full_response += response.choices[0].delta.content or ""
                     message_placeholder.markdown(full_response + "▌")
                 message_placeholder.markdown(full_response)
                 EXPLANATION.append(

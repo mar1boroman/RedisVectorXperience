@@ -1,7 +1,9 @@
 import os
 import csv
 import time
-import openai
+from openai import OpenAI
+
+
 import configparser
 from typing import List
 from dotenv import load_dotenv
@@ -14,14 +16,12 @@ load_dotenv()
 OPENAI_EMBEDDING_MODEL = "text-embedding-ada-002"
 OPENAI_TEXT_MODEL = "gpt-3.5-turbo"
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+client = OpenAI(api_key=OPENAI_API_KEY)
 
 
 def get_embedding(doc):
-    openai.api_key = OPENAI_API_KEY
-    response = openai.Embedding.create(
-        input=doc, model=OPENAI_EMBEDDING_MODEL, encoding_format="float"
-    )
-    embedding = response["data"][0]["embedding"]
+    response = client.embeddings.create(input=doc, model=OPENAI_EMBEDDING_MODEL, encoding_format="float")
+    embedding = response.data[0].embedding
     return embedding
 
 

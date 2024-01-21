@@ -1,7 +1,9 @@
 import redis
 import os
 import streamlit as st
-import openai
+from openai import OpenAI
+
+
 import numpy as np
 from redis.commands.search.query import Query
 from dotenv import load_dotenv
@@ -14,17 +16,14 @@ OPENAI_EMBEDDING_MODEL = "text-embedding-ada-002"
 INDEX_NAME = "idx:blogs"
 EXPLANATION = []
 # Common Functions
-
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 def get_embedding(doc):
     EXPLANATION.append(
         f"The app uses the Open AI *{OPENAI_EMBEDDING_MODEL}* API to generate an embedding for the text '{doc}'"
     )
-    openai.api_key = os.getenv("OPENAI_API_KEY")
-    response = openai.Embedding.create(
-        input=doc, model=OPENAI_EMBEDDING_MODEL, encoding_format="float"
-    )
-    embedding = response["data"][0]["embedding"]
+    response = client.embeddings.create(input=doc, model=OPENAI_EMBEDDING_MODEL, encoding_format="float")
+    embedding = response.data[0].embedding
     return embedding
 
 
